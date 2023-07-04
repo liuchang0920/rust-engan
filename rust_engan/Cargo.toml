@@ -1,5 +1,5 @@
 [package]
-name = "rust-engan"
+name = "rust_engan"
 version = "0.1.0"
 edition = "2021"
 
