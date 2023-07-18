@@ -17,28 +17,27 @@ struct EchoNode {
 }
 
 impl Node<(), Payload> for EchoNode {
-    fn from_init(_state: (), _init: rust_engan::Init) -> anyhow::Result<Self> {
+    fn from_init(
+        _state: (),
+        _init: rust_engan::Init,
+        _tx: std::sync::mpsc::Sender<Event<Payload>>,
+    ) -> anyhow::Result<Self> {
         Ok(EchoNode { id: 1 })
     }
 
-    fn step(&mut self, input: Message<Payload>, output: &mut StdoutLock) -> anyhow::Result<()> {
-        match input.body.payload {
+    fn step(&mut self, input: Event<Payload>, output: &mut StdoutLock) -> anyhow::Result<()> {
+        let Event::Message(input) = input else {
+            panic!("got injected event when there's no event injection");
+        };
+
+        let mut reply = input.into_reply(Some(&mut self.id));
+        match reply.body.payload {
             Payload::Echo { echo } => {
-                let reply = Message {
-                    src: input.dst,
-                    dst: input.src,
-                    body: Body {
-                        id: Some(self.id),
-                        in_reply_to: input.body.id,
-                        payload: Payload::EchoOk { echo },
-                    },
-                };
+                reply.body.payload = Payload::EchoOk { echo };
+
                 serde_json::to_writer(&mut *output, &reply)
-                    .context("serialize repsonse to init")?;
-
-                output.write_all(b"\n").context("write trailing new line")?;
-
-                self.id += 1;
+                    .context("serialize response to init")?;
+                output.write_all(b"\n").context("write trailing newline")?;
             }
             Payload::EchoOk { .. } => (),
         }
@@ -47,5 +46,5 @@ impl Node<(), Payload> for EchoNode {
 }
 
 fn main() -> anyhow::Result<()> {
-    main_loop::<_, EchoNode, _>(())
+    main_loop::<_, EchoNode, _, _>(())
 }
